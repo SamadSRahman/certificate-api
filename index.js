@@ -1,11 +1,14 @@
-// Certificate Generator API
 const express = require('express');
-const { createCanvas, loadImage, registerFont } = require('canvas');
+const { createCanvas } = require('canvas');
 const app = express();
 const port = 3000;
 
 // Configure middleware
 app.use(express.json());
+
+// Setup view engine for SSR
+app.set('view engine', 'ejs');
+app.set('views', './views');
 
 // Static bearer token for authentication
 const BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6ImNlcnRpZmljYXRlLWdlbmVyYXRvciJ9";
@@ -21,7 +24,7 @@ const authenticateToken = (req, res, next) => {
   next();
 };
 
-// Certificate generation endpoint
+// Original API endpoint with two response format options
 app.post('/api/generate-certificate', authenticateToken, async (req, res) => {
   try {
     // Extract parameters from request body
@@ -31,7 +34,8 @@ app.post('/api/generate-certificate', authenticateToken, async (req, res) => {
       completionDate,
       certificateId,
       issuerName = "Certificate Authority",
-      customMessage = ""
+      customMessage = "",
+      format = "png" // Default format is PNG, but can be "html" for SSR
     } = req.body;
     
     // Validate required parameters
@@ -51,13 +55,31 @@ app.post('/api/generate-certificate', authenticateToken, async (req, res) => {
       customMessage
     });
     
-    // Set response headers
+    // If HTML format is requested, render the SSR view
+    if (format.toLowerCase() === 'html') {
+      // Convert buffer to base64 for embedding in HTML
+      const certificateBase64 = `data:image/png;base64,${certificateBuffer.toString('base64')}`;
+      
+      // Render the certificate view with the image and data
+      return res.render('certificate-view', {
+        certificateImage: certificateBase64,
+        data: {
+          recipientName,
+          courseName,
+          completionDate,
+          certificateId,
+          issuerName,
+          customMessage
+        }
+      });
+    }
+    
+    // Default: Return the PNG image
     res.set({
       'Content-Type': 'image/png',
       'Content-Disposition': `attachment; filename="certificate-${certificateId}.png"`
     });
     
-    // Send certificate image
     res.send(certificateBuffer);
   } catch (error) {
     console.error('Error generating certificate:', error);
@@ -65,7 +87,7 @@ app.post('/api/generate-certificate', authenticateToken, async (req, res) => {
   }
 });
 
-// Certificate generation function
+// Certificate generation function (unchanged)
 async function generateCertificate(params) {
   // Create canvas for certificate (landscape orientation)
   const width = 1200;
@@ -137,5 +159,5 @@ async function generateCertificate(params) {
 
 // Start server
 app.listen(port, () => {
-  console.log(`Certificate API server running at http://localhost:${port}`);
+  console.log(`Certificate API with SSR server running at http://localhost:${port}`);
 });
