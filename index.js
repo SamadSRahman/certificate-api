@@ -24,70 +24,65 @@ const authenticateToken = (req, res, next) => {
   next();
 };
 
-// Original API endpoint with two response format options
+// Certificate API endpoint (HTML response by default)
 app.post('/api/generate-certificate', authenticateToken, async (req, res) => {
   try {
     // Extract parameters from request body
     const {
-      recipientName,
-      courseName,
-      completionDate,
-      certificateId,
-      issuerName = "Certificate Authority",
-      customMessage = "",
-      format = "png" // Default format is PNG, but can be "html" for SSR
+      name,
+      dealerName,
+      dealerCode,
+      date,
+      assessmentName,
+      format = "html" // Default to HTML response
     } = req.body;
     
     // Validate required parameters
-    if (!recipientName || !courseName || !completionDate || !certificateId) {
+    if (!name || !dealerName || !dealerCode || !date || !assessmentName) {
       return res.status(400).json({ 
-        error: "Missing required parameters. Please provide recipientName, courseName, completionDate, and certificateId." 
+        error: "Missing required parameters. Please provide name, dealerName, dealerCode, date, and assessmentName." 
       });
     }
     
-    // Generate certificate image
-    const certificateBuffer = await generateCertificate({
-      recipientName,
-      courseName,
-      completionDate,
-      certificateId,
-      issuerName,
-      customMessage
-    });
+    // Hard-coded company name
+    const companyName = "Toyota Kirloskar Motor Pvt Ltd";
     
-    // If HTML format is requested, render the SSR view
-    if (format.toLowerCase() === 'html') {
-      // Convert buffer to base64 for embedding in HTML
-      const certificateBase64 = `data:image/png;base64,${certificateBuffer.toString('base64')}`;
+    // Generate certificate image if PNG format is requested
+    if (format.toLowerCase() === 'png') {
+      const certificateBuffer = await generateCertificate({
+        name,
+        dealerName,
+        dealerCode,
+        date,
+        assessmentName,
+        companyName
+      });
       
-      // Render the certificate view with the image and data
-      return res.render('certificate-view', {
-        certificateImage: certificateBase64,
-        data: {
-          recipientName,
-          courseName,
-          completionDate,
-          certificateId,
-          issuerName,
-          customMessage
-        }
+      // Return the PNG image
+      res.set({
+        'Content-Type': 'image/png',
+        'Content-Disposition': `attachment; filename="certificate-${name}.png"`
       });
+      
+      return res.send(certificateBuffer);
     }
     
-    // Default: Return the PNG image
-    res.set({
-      'Content-Type': 'image/png',
-      'Content-Disposition': `attachment; filename="certificate-${certificateId}.png"`
+    // Default: Render HTML certificate (SSR)
+    res.render('certificate', {
+      name,
+      dealerName,
+      dealerCode,
+      date,
+      assessmentName,
+      companyName
     });
-    
-    res.send(certificateBuffer);
   } catch (error) {
     console.error('Error generating certificate:', error);
     res.status(500).json({ error: 'Failed to generate certificate' });
   }
 });
 
-// Certificate generation function (unchanged)
+// Certificate generation function for PNG format
 async function generateCertificate(params) {
   // Create canvas for certificate (landscape orientation)
   const width = 1200;
@@ -96,7 +91,7 @@ async function generateCertificate(params) {
   const ctx = canvas.getContext('2d');
   
   // Draw certificate background
-  ctx.fillStyle = '#f5f5f5';
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
   
   // Add decorative border
@@ -119,39 +114,31 @@ async function generateCertificate(params) {
   ctx.font = '28px Arial';
   ctx.fillText('This is to certify that', width / 2, 250);
   
-  // Add recipient name
+  // Add name
   ctx.font = 'bold 48px Arial';
   ctx.fillStyle = '#d4af37'; // Gold color
-  ctx.fillText(params.recipientName, width / 2, 320);
+  ctx.fillText(params.name, width / 2, 320);
   
-  // Add course completion text
+  // Add dealer name and code
   ctx.font = '28px Arial';
   ctx.fillStyle = '#000000';
-  ctx.fillText('has successfully completed the course', width / 2, 390);
+  ctx.fillText(`${params.dealerName} - ${params.dealerCode}`, width / 2, 390);
   
-  // Add course name
-  ctx.font = 'bold 40px Arial';
-  ctx.fillStyle = '#d4af37'; // Gold color
-  ctx.fillText(params.courseName, width / 2, 460);
+  // Add completion text
+  ctx.fillText(`has successfully completed`, width / 2, 460);
+
+// Add assessment name
+ctx.font = 'italic 28px Arial';
+ctx.fillStyle = '#d4af37'; // Gold color
+ctx.fillText(params.assessmentName, width / 2, 320);
   
-  // Add completion date
-  ctx.font = '28px Arial';
-  ctx.fillStyle = '#000000';
-  ctx.fillText(`Completed on: ${params.completionDate}`, width / 2, 530);
+  // Add date (left aligned)
+  ctx.textAlign = 'left';
+  ctx.fillText(params.date, 150, 650);
   
-  // Add custom message if provided
-  if (params.customMessage) {
-    ctx.font = 'italic 24px Arial';
-    ctx.fillText(`"${params.customMessage}"`, width / 2, 600);
-  }
-  
-  // Add certificate ID
-  ctx.font = '20px Arial';
-  ctx.fillText(`Certificate ID: ${params.certificateId}`, width / 2, 680);
-  
-  // Add issuer name
-  ctx.font = 'bold 32px Arial';
-  ctx.fillText(params.issuerName, width / 2, 750);
+  // Add company name (right aligned)
+  ctx.textAlign = 'right';
+  ctx.fillText(params.companyName, width - 150, 650);
   
   // Convert canvas to buffer
   return canvas.toBuffer('image/png');
@@ -159,5 +146,5 @@ async function generateCertificate(params) {
 
 // Start server
 app.listen(port, () => {
-  console.log(`Certificate API with SSR server running at http://localhost:${port}`);
+  console.log(`Certificate API server running at http://localhost:${port}`);
 });
